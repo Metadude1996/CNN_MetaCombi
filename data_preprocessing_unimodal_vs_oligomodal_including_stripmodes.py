@@ -1,8 +1,5 @@
-"Ryan van Mastrigt, 31.01.2022"
-"This scripts creates a neural network ready dataset from unit cell designs in Pixel representation and their class"
-"through splitting the data into train & test sets, adding padding, artificially creating more class C through "
-"translation + rotation of existing class C unit cells, and randomly undersampling class I cells to create a class"
-"balanced training set for classification (i)."
+"Ryan van Mastrigt, 29.07.2022"
+"This script preprocesses the pentodal metamaterial data for neural network training for classification (ii)"
 
 import numpy as np
 SEED = 0
@@ -72,34 +69,37 @@ def transrotconfigs(pixreps, resultstotal, k, extended=False):
                     k, k, k, k), resfinal)
     return pixrepfinal, resfinal
 
-"set starting parameters"
-extended=True
-k=7
+extended=False
+k=5
 filter_size = (2, 2)
 stride = (2, 2)
 
-datastring = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\PixelRep_{:d}x{:d}.npy'.format(k, k)
+if k < 5:
+    datastring = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\PixelRep_{:d}x{:d}.txt'.format(k, k)
+else:
+    datastring = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\PixelRep_{:d}x{:d}.npy'.format(k, k)
 datastring_extended = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\PixelRep_{:d}x{:d}_extended.npy'.\
     format(k, k)
 if k==5:
-    resultsstring=r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_i_Scen_slope_offset' \
-                  r'_M1k_5x5_fixn4.npy'
+    resultsstring=r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_unimodal_vs_oligomodal_vs_plurimodal_i_Scen_slope_modes_M1k_5x5_fixn4.txt'
 elif k>6:
-    resultsstring = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_new_rrQR_i_Scen_' \
-                    r'slope_M1k_{:d}x{:d}.txt'.format(
+    resultsstring = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_unimodal_vs_oligomodal_vs_plurimodal_i_Scen_slope_modes_M1k_{:d}x{:d}_fixn4.txt'.format(
         k, k)
-    resultsstring_extended = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_new_rrQR' \
-                             r'_i_Scen_slope_M1k_{:d}x{:d}_extended.txt'.format(k, k)
+    resultsstring_extended = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_unimodal_vs_oligomodal_vs_plurimodal_i_' \
+                             r'Scen_slope_modes_M1k_{:d}x{:d}_extended.txt'.format(
+        k, k)
 else:
-    resultsstring = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_new_rrQR_i_Scen_' \
-                    r'slope_M1k_{:d}x{:d}.npy'.format(k, k)
+    resultsstring = r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_unimodal_vs_' \
+                    r'oligomodal_vs_plurimodal_i_Scen_slope_modes_M1k_{:d}x{:d}_fixn4.txt'.format(k, k)
 
 # data = np.loadtxt(datastring, delimiter=',')
 # results = np.loadtxt(resultsstring, delimiter=',')
 # np.save(r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\PixelRep_5x5.npy', data)
-# np.save(r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_i_Scen_slope_offset_M1k_5x5' \
-#           r'_fixn4.npy', results)
-data = np.load(datastring)
+# np.save(r'C:\Users\ryanv\PycharmProjects\MetaCombi\results\modescaling\results_analysis_i_Scen_slope_offset_M1k_5x5_fixn4.npy', results)
+if k < 5:
+    data = np.loadtxt(datastring, delimiter=',')
+else:
+    data = np.load(datastring)
 if extended:
     data = np.append(data, np.load(datastring_extended), axis=0)
 if k>6:
@@ -107,12 +107,18 @@ if k>6:
     if extended:
         results = np.append(results, np.loadtxt(resultsstring_extended, delimiter=','), axis=0)
 else:
-    results = np.load(resultsstring)
+    results = np.loadtxt(resultsstring, delimiter=',')
 data = np.reshape(data, (-1, 2*k, 2*k))
 x_total = data
 
-
-
+"select only unimodal vs oligomodal (include stripmodes)"
+ind_U = np.argwhere(results[:, 3].astype(int) == 1)
+ind_O = np.argwhere(results[:, 3].astype(int) > 1)
+ind_UO = np.append(ind_U, ind_O, axis=0)
+x_total = x_total[ind_UO[:, 0]]
+y_total = np.full_like(ind_U[:, 0], 0)
+y_total = np.append(y_total, np.full_like(ind_O[:, 0], 1))
+# y_total = results[ind_UO[:, 0], 1].astype(int)
 
 "create a split of the data"
 test_frac = 0.15
@@ -123,28 +129,28 @@ test_ind = np.arange(np.shape(x_total)[0])
 np.random.shuffle(test_ind)
 test_ind = test_ind[:int(test_frac*np.shape(x_total)[0])]
 test_set = x_total[test_ind]
-test_y = results[test_ind, 1].astype(int)
+test_y = y_total[test_ind].astype(int)
 rest_set = np.delete(x_total, test_ind, axis=0)
-rest_results = np.delete(results, test_ind, axis=0)
+rest_y = np.delete(y_total, test_ind, axis=0)
 
-"remove the X configs (neither C nor I)"
-indCt = np.argwhere(test_y==2)[:, 0]
-indCr = np.argwhere(rest_results[:, 1]==2)[:, 0]
-test_set = np.delete(test_set, indCt, axis=0)
-test_y = np.delete(test_y, indCt, axis=0)
-
-rest_set = np.delete(rest_set, indCr, axis=0)
-rest_results = np.delete(rest_results, indCr, axis=0)
+"remove the C configs"
+# indCt = np.argwhere(test_y==2)[:, 0]
+# indCr = np.argwhere(rest_results[:, 1]==2)[:, 0]
+# test_set = np.delete(test_set, indCt, axis=0)
+# test_y = np.delete(test_y, indCt, axis=0)
+#
+# rest_set = np.delete(rest_set, indCr, axis=0)
+# rest_results = np.delete(rest_results, indCr, axis=0)
 
 "add translations + rotations to rest set"
-rest_set, rest_results = transrotconfigs(rest_set, rest_results, k, extended=extended)
-# rest_set = np.load('.\\cnniter_HP_GS_SKF_{:d}x{:d}_AB_5050\\PixelRep_{:d}x{:d}_xrest_rottrans_extended.npy'
-#                    .format(k, k, k, k))
-# rest_results = np.load('.\\cnniter_HP_GS_SKF_{:d}x{:d}_AB_5050\\results_analysis_i_Scen_slope_M1k_{:d}x{:d}_xrest'
-#                        '_rottrans_extended.npy'.format(k, k, k, k))
-
-rest_set = np.reshape(rest_set, (-1, 2*k, 2*k))
-rest_y = rest_results[:, 1].astype(int)
+# rest_set, rest_results = transrotconfigs(rest_set, rest_results, k, extended=extended)
+# # rest_set = np.load('.\\cnniter_HP_GS_SKF_{:d}x{:d}_AB_5050\\PixelRep_{:d}x{:d}_xrest_rottrans_extended.npy'
+# #                    .format(k, k, k, k))
+# # rest_results = np.load('.\\cnniter_HP_GS_SKF_{:d}x{:d}_AB_5050\\results_analysis_i_Scen_slope_M1k_{:d}x{:d}_xrest'
+# #                        '_rottrans_extended.npy'.format(k, k, k, k))
+#
+# rest_set = np.reshape(rest_set, (-1, 2*k, 2*k))
+# rest_y = rest_results[:, 1].astype(int)
 
 "create periodic padding (make sure to set conv2d padding to valid!)"
 # x_rest = np.tile(rest_set, (1, 3, 3))
@@ -184,11 +190,11 @@ rest_set = x_rest.copy()
 
 "make 5050 distribution rest set"
 x_rest, rest_y = unison_shuffled_copies(x_rest, rest_y)
-ind_A = np.argwhere(rest_y == 0)
-ind_B = np.argwhere(rest_y == 1)
-ind_A_short = ind_A[:int(ind_B.shape[0]), 0]
-ind_B_short = ind_B[:int(ind_A.shape[0]), 0]
-indices = np.append(ind_A_short, ind_B_short)
+ind_U = np.argwhere(rest_y == 0)
+ind_O = np.argwhere(rest_y == 1)
+ind_U_short = ind_U[:int(ind_O.shape[0]), 0]
+ind_O_short = ind_O[:int(ind_U.shape[0]), 0]
+indices = np.append(ind_U_short, ind_O_short)
 x_rest, y_rest = x_rest[indices], rest_y[indices]
 
 "add channel axis"
@@ -198,10 +204,10 @@ x_test = x_test[..., np.newaxis]
 
 "save the data"
 if extended:
-    np.savez('cnniter_HP_GS_SKF_{:d}x{:d}_AB_5050\\data_prek_xy_train_trainraw_test_{:d}x{:d}_extended.npz'.format(k, k,
+    np.savez('data_unimodal_vs_oligomodal_inc_stripmodes_train_trainraw_test_{:d}x{:d}_extended.npz'.format(k, k,
                                                                                                                    k, k)
              , x_rest=x_rest, y_rest=y_rest, x_rest_raw=rest_set, y_rest_raw=rest_y, x_test=x_test, y_test=test_y)
 else:
-    np.savez('cnniter_HP_GS_SKF_{:d}x{:d}_AB_5050\\data_prek_xy_train_trainraw_test_{:d}x{:d}.npz'.format(k, k, k, k),
+    np.savez('data_unimodal_vs_oligomodal_inc_stripmodes_train_trainraw_test_{:d}x{:d}.npz'.format(k, k, k, k),
              x_rest=x_rest, y_rest=y_rest, x_rest_raw = rest_set, y_rest_raw = rest_y, x_test = x_test, y_test=test_y)
 # np.savez(os.path.join(masterdir, 'data_prek_xy_train_trainraw_test.npz'), x_rest=x_rest, y_rest=y_rest, x_rest_raw=x_rest_raw, y_rest_raw=y_rest_raw, x_test=x_test, y_test=y_test)
